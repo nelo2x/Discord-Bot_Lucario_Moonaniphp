@@ -1529,17 +1529,28 @@ def register_commands(bot: LucarioDiscordBot) -> None:
             return
 
         added = bot.add_global_channel(interaction.guild_id, "raid_channels", channel.id)
-        if added:
-            await interaction.response.send_message(
-                f"Raid channel added: {channel.mention}. I will post the top "
-                f"{bot.raid_broadcast_limit} raids there every 30 minutes.",
-                ephemeral=True,
-            )
-        else:
+        if not added:
             await interaction.response.send_message(
                 f"{channel.mention} was already set as a raid channel.",
                 ephemeral=True,
             )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        try:
+            raids = await bot._fetch_raid_source_data()
+            top_raids = raids[: bot.raid_broadcast_limit]
+            if top_raids:
+                await channel.send(embed=_build_raid_digest_embed(top_raids))
+        except Exception as exc:
+            print(f"Could not send the initial raid digest to channel {channel.id}: {exc}")
+
+        await interaction.followup.send(
+            f"Raid channel added: {channel.mention}. I will post the top "
+            f"{bot.raid_broadcast_limit} raids there right away, then every 30 minutes.",
+            ephemeral=True,
+        )
 
     @bot.tree.command(name="remove_raid_channel", description="Disables the automatic raid digest in a channel.")
     @app_commands.describe(channel="Channel that will stop receiving the raid digest")
